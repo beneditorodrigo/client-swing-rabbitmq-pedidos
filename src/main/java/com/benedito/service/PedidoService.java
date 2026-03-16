@@ -2,6 +2,9 @@ package com.benedito.service;
 
 import com.benedito.model.Pedido;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -12,7 +15,11 @@ public class PedidoService {
 
     private static final String API_URL = "http://localhost:8080/api/pedidos";
 
-    private ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    public PedidoService(){
+        mapper.registerModule(new JavaTimeModule());
+    }
 
     public UUID enviarPedido(Pedido pedido) throws Exception {
 
@@ -25,22 +32,24 @@ public class PedidoService {
 
         String json = mapper.writeValueAsString(pedido);
 
-        OutputStream os = conn.getOutputStream();
-        os.write(json.getBytes());
-        os.flush();
+        try(OutputStream os = conn.getOutputStream()) {
+            os.write(json.getBytes());
+            os.flush();
+        }
 
         int responseCode = conn.getResponseCode();
 
-        if (responseCode == 202) {
+        if (responseCode == 202 || responseCode == 200) {
 
-            Scanner scanner = new Scanner(conn.getInputStream());
-            String response = scanner.useDelimiter("\\A").next();
-            scanner.close();
+            try (InputStream is = conn.getInputStream();
+                 Scanner scanner = new Scanner(is)) {
 
-            return UUID.fromString(response.replace("\"", ""));
+                String response = scanner.useDelimiter("\\A").next();
+                return UUID.fromString(response.replace("\"", "").trim());
+            }
         }
 
-        throw new RuntimeException("Erro ao enviar pedido");
+        throw new RuntimeException("Erro ao enviar pedido. HTTP: " + responseCode);
     }
 
     public String consultarStatus(UUID id) throws Exception {
@@ -50,10 +59,18 @@ public class PedidoService {
 
         conn.setRequestMethod("GET");
 
-        Scanner scanner = new Scanner(conn.getInputStream());
-        String status = scanner.useDelimiter("\\A").next();
-        scanner.close();
+        int responseCode = conn.getResponseCode();
 
-        return status.replace("\"", "");
+        if (responseCode == 200) {
+
+            try (InputStream is = conn.getInputStream();
+                 Scanner scanner = new Scanner(is)) {
+
+                String status = scanner.useDelimiter("\\A").next();
+                return status.replace("\"", "").trim();
+            }
+        }
+
+        throw new RuntimeException("Erro ao consultar status. HTTP: " + responseCode);
     }
 }

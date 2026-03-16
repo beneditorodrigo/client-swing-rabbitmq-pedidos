@@ -2,6 +2,7 @@ package com.benedito.view;
 
 import com.benedito.model.Pedido;
 import com.benedito.service.PedidoService;
+
 import javax.swing.JButton;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -74,30 +75,23 @@ public class PedidoFrame extends JFrame {
 
             String statusAtual = pedidos.get(id);
 
-            if (statusAtual.equals("AGUARDANDO PROCESSO") || statusAtual.equals("PROCESSANDO")) {
+            if ("AGUARDANDO PROCESSO".equals(statusAtual) || "PROCESSANDO".equals(statusAtual)) {
 
-                new Thread(() -> {
+                try {
+                    String novoStatus = pedidoService.consultarStatus(id);
 
-                    try {
+                    if (!novoStatus.equals(statusAtual)) {
 
-                        String novoStatus = pedidoService.consultarStatus(id);
+                        pedidos.put(id, novoStatus);
 
-                        if (!novoStatus.equals(statusAtual)) {
+                        SwingUtilities.invokeLater(() ->
+                            statusArea.append("Pedido " + id + " → " + novoStatus + "\n")
+                        );
 
-                            pedidos.put(id, novoStatus);
-
-                            SwingUtilities.invokeLater(() -> {
-
-                                statusArea.append("Pedido " + id + " → " + novoStatus + "\n");
-
-                            });
-
-                        }
-
-                    } catch (Exception ignored) {
                     }
 
-                }).start();
+                } catch (Exception ignored) {
+                }
             }
         }
     }
@@ -105,9 +99,19 @@ public class PedidoFrame extends JFrame {
     private void enviarPedido() {
 
         try {
-
             String produto = produtoField.getText();
+
+            if (produto.isEmpty()){
+                JOptionPane.showMessageDialog(this, "Informe o produto.");
+                return;
+            }
+
             int quantidade = Integer.parseInt(quantidadeField.getText());
+
+            if (quantidade <= 0) {
+                JOptionPane.showMessageDialog(this, "Quantidade deve ser maior que zero.");
+                return;
+            }
 
             Pedido pedido = new Pedido(
                     UUID.randomUUID(),
@@ -121,13 +125,21 @@ public class PedidoFrame extends JFrame {
             pedidos.put(id, "AGUARDANDO PROCESSO");
             statusArea.append("Pedido " + id + " → ENVIADO, AGUARDANDO PROCESSO\n");
 
+        } catch (NumberFormatException ex) {
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Quantidade inválida.",
+                    "Erro",
+                    JOptionPane.ERROR_MESSAGE
+            );
+
         } catch (Exception ex) {
 
             String mensagem = "Erro ao enviar pedido.";
 
-            // Aqui apenas deixo a mensagem mais informativa, ao invés de genérica
-            if (ex.getMessage().contains("Connection refused")) {
-                mensagem = "Não foi possível conectar ao servidor.";
+            if (ex.getMessage() != null && ex.getMessage().contains("Connection refused")) {
+                mensagem = "Servidor backend não está rodando.";
             }
 
             JOptionPane.showMessageDialog(
@@ -136,7 +148,6 @@ public class PedidoFrame extends JFrame {
                     "Erro",
                     JOptionPane.ERROR_MESSAGE
             );
-
         }
     }
 }
